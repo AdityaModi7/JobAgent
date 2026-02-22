@@ -1,4 +1,8 @@
-"""Job Parser — Extracts structured job data from URLs or raw text."""
+"""Job Parser — Extracts structured job data from URLs or raw text.
+
+Supports JS-rendered pages (Ashby, Greenhouse, Lever, etc.) via Playwright.
+Falls back to requests+BeautifulSoup for simple pages.
+"""
 
 import sys
 import re
@@ -30,115 +34,86 @@ Return ONLY valid JSON with this exact schema (no markdown, no backticks):
     "company_info": "Brief company description if available" or null
 }
 
-IMPORTANT: Every field must have a value. For title, company, and description use your best guess from the text — never return null for these. Be thorough in extracting skills — include both explicit requirements and those implied by the responsibilities."""
+IMPORTANT: Every field must have a value. For title, company, and description use your best guess from the text — never return null for these. Be thorough in extracting skills."""
 
 
-# ── URL Fetching Strategies ───────────────────────────────────────────────
+# ── Sites that need a real browser ────────────────────────────────────────
 
-def fetch_ashby_api(url: str) -> str | None:
-    """Try to fetch job data from Ashby's API (used by many startups)."""
-    # Extract job ID from Ashby URLs
-    # Format: jobs.ashbyhq.com/COMPANY/JOB_ID
-    match = re.search(r"jobs\.ashbyhq\.com/([^/]+)/([a-f0-9-]+)", url)
-    if not match:
-        return None
+JS_RENDERED_SITES = [
+    "ashbyhq.com",
+    "lever.co",
+    "myworkdayjobs.com",
+    "workday.com",
+    "icims.com",
+    "smartrecruiters.com",
+    "jobvite.com",
+]
 
-    company_slug = match.group(1)
-    job_id = match.group(2)
 
-    # Ashby has a public API for job postings
-    api_url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}/job/{job_id}"
+def needs_browser(url: str) -> bool:
+    """Check if a URL is known to need browser rendering."""
+    return any(site in url.lower() for site in JS_RENDERED_SITES)
+
+
+# ── Playwright Browser Fetch ─────────────────────────────────────────────
+
+def fetch_with_browser(url: str) -> str:
+    """Fetch page content using a real browser (handles JavaScript-rendered pages)."""
     try:
-        resp = requests.get(api_url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            info = data.get("info", data)
-            title = info.get("title", "")
-            location = info.get("locationName", info.get("location", ""))
-            description_html = info.get("descriptionHtml", info.get("description", ""))
-            
-            # Strip HTML from description
-            if description_html:
-                soup = BeautifulSoup(description_html, "html.parser")
-                description_text = soup.get_text(separator="\n", strip=True)
-            else:
-                description_text = ""
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise ImportError(
+            "Playwright is required for JS-rendered pages.\n"
+            "Install it:\n"
+            "  pip install playwright\n"
+            "  playwright install chromium"
+        )
 
-            company_name = info.get("organizationName", company_slug)
-            
-            return f"Title: {title}\nCompany: {company_name}\nLocation: {location}\n\n{description_text}"
-    except Exception:
-        pass
-    return None
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
+        try:
+            page.goto(url, wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(3000)
+            content = page.content()
+        finally:
+            browser.close()
 
-def fetch_greenhouse_api(url: str) -> str | None:
-    """Try to fetch job data from Greenhouse's API."""
-    match = re.search(r"boards\.greenhouse\.io/(\w+)/jobs/(\d+)", url)
-    if not match:
-        match = re.search(r"greenhouse\.io/.*?/jobs/(\d+)", url)
-    if not match:
-        return None
+    soup = BeautifulSoup(content, "html.parser")
 
-    job_id = match.group(2) if match.lastindex >= 2 else match.group(1)
-    api_url = f"https://boards-api.greenhouse.io/v1/boards/jobs/{job_id}"
-    
-    try:
-        resp = requests.get(api_url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            title = data.get("title", "")
-            location = data.get("location", {}).get("name", "")
-            content_html = data.get("content", "")
-            
-            if content_html:
-                soup = BeautifulSoup(content_html, "html.parser")
-                content_text = soup.get_text(separator="\n", strip=True)
-            else:
-                content_text = ""
-            
-            return f"Title: {title}\nLocation: {location}\n\n{content_text}"
-    except Exception:
-        pass
-    return None
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe"]):
+        tag.decompose()
+
+    selectors = [
+        '[class*="job-description"]',
+        '[class*="job-details"]',
+        '[class*="posting-"]',
+        '[class*="ashby-"]',
+        '[class*="content"]',
+        "article",
+        '[id*="job"]',
+        "main",
+    ]
+
+    for selector in selectors:
+        elements = soup.select(selector)
+        for el in elements:
+            text = el.get_text(separator="\n", strip=True)
+            if len(text) > 200:
+                return text
+
+    body = soup.find("body")
+    if body:
+        return body.get_text(separator="\n", strip=True)
+
+    return soup.get_text(separator="\n", strip=True)
 
 
-def fetch_lever_api(url: str) -> str | None:
-    """Try to fetch job data from Lever's API."""
-    match = re.search(r"jobs\.lever\.co/([^/]+)/([a-f0-9-]+)", url)
-    if not match:
-        return None
+# ── Simple HTML Fetch ─────────────────────────────────────────────────────
 
-    company = match.group(1)
-    job_id = match.group(2)
-    api_url = f"https://api.lever.co/v0/postings/{company}/{job_id}"
-
-    try:
-        resp = requests.get(api_url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            title = data.get("text", "")
-            location = data.get("categories", {}).get("location", "")
-            description = data.get("descriptionPlain", "")
-            lists = data.get("lists", [])
-            
-            extra = ""
-            for lst in lists:
-                extra += f"\n\n{lst.get('text', '')}:\n"
-                for item in lst.get("content", []):
-                    if isinstance(item, str):
-                        extra += f"- {item}\n"
-                    elif isinstance(item, dict):
-                        extra += f"- {BeautifulSoup(item.get('text', ''), 'html.parser').get_text()}\n"
-            
-            return f"Title: {title}\nLocation: {location}\n\n{description}{extra}"
-    except Exception:
-        pass
-    return None
-
-
-def fetch_html_generic(url: str) -> str:
-    """Generic HTML fetcher as a fallback."""
+def fetch_html_simple(url: str) -> str:
+    """Simple HTML fetcher for non-JS pages."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -152,7 +127,6 @@ def fetch_html_generic(url: str) -> str:
     for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
         tag.decompose()
 
-    # Try common job posting containers
     selectors = [
         "article",
         '[class*="job-description"]',
@@ -177,38 +151,60 @@ def fetch_html_generic(url: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
+# ── Main Fetch Logic ──────────────────────────────────────────────────────
+
 def fetch_job_url(url: str) -> str:
     """Fetch job posting text using the best strategy for the URL."""
-    
-    # Try ATS-specific APIs first (they return clean data)
-    strategies = [
-        ("Ashby API", fetch_ashby_api),
-        ("Greenhouse API", fetch_greenhouse_api),
-        ("Lever API", fetch_lever_api),
-    ]
 
-    for name, strategy in strategies:
-        result = strategy(url)
-        if result and len(result.strip()) > 100:
-            print(f"   ✅ Fetched via {name}")
-            return result
+    # For known JS-rendered sites, go straight to browser
+    if needs_browser(url):
+        print(f"   🌐 JS-rendered site detected, using browser...")
+        try:
+            text = fetch_with_browser(url)
+            if len(text.strip()) > 100:
+                print(f"   ✅ Fetched {len(text)} characters via browser")
+                return text
+        except ImportError as e:
+            print(f"   ⚠️  {e}")
+        except Exception as e:
+            print(f"   ⚠️  Browser fetch failed: {e}")
 
-    # Fall back to generic HTML scraping
-    print(f"   ⚡ Using HTML scraper...")
-    text = fetch_html_generic(url)
-    
-    if len(text.strip()) < 100:
-        raise ValueError(
-            f"Could not extract enough content from URL.\n"
-            f"This site likely loads content with JavaScript.\n\n"
-            f"Try instead:\n"
-            f"  1. Copy the job description text from the page\n"
-            f"  2. Save it to a file (e.g., job.txt)\n"
-            f"  3. Run: python main.py apply --job-file job.txt"
-        )
-    
-    return text
+    # Try simple HTML fetch
+    print(f"   ⚡ Trying simple HTML scraper...")
+    try:
+        text = fetch_html_simple(url)
+        if len(text.strip()) > 100:
+            print(f"   ✅ Fetched {len(text)} characters")
+            return text
+    except Exception as e:
+        print(f"   ⚠️  HTML scraper failed: {e}")
 
+    # If simple fetch didn't work and we haven't tried browser yet, try it
+    if not needs_browser(url):
+        print(f"   🌐 Simple scraper insufficient, trying browser...")
+        try:
+            text = fetch_with_browser(url)
+            if len(text.strip()) > 100:
+                print(f"   ✅ Fetched {len(text)} characters via browser")
+                return text
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"   ⚠️  Browser fetch also failed: {e}")
+
+    # All strategies failed
+    raise ValueError(
+        "Could not extract job posting content from this URL.\n\n"
+        "Try instead:\n"
+        "  1. Copy the job description text from the page\n"
+        "  2. Save it to a file (e.g., job.txt)\n"
+        "  3. Run: python main.py apply --job-file job.txt\n\n"
+        "Or paste it directly:\n"
+        "  python main.py apply  (then paste and hit Ctrl+D)"
+    )
+
+
+# ── Parse Job Posting ─────────────────────────────────────────────────────
 
 def parse_job_posting(text: str = None, url: str = None) -> JobPosting:
     """Parse a job posting from raw text or URL into structured data."""
@@ -225,11 +221,10 @@ def parse_job_posting(text: str = None, url: str = None) -> JobPosting:
         max_tokens=2000,
     )
 
-    # Ensure required fields have values
     data["title"] = data.get("title") or "Unknown Title"
     data["company"] = data.get("company") or "Unknown Company"
     data["description"] = data.get("description") or "No description available"
-    
+
     data["raw_text"] = raw_text[:5000]
     if url:
         data["application_url"] = url

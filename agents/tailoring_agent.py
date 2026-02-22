@@ -59,15 +59,18 @@ Analyze the fit between this candidate and job.""",
 
 RESUME_TAILOR_PROMPT = """You are an expert resume writer. Given a candidate's profile and a target job posting, create a tailored resume.
 
-Key principles:
-1. REORDER skills to put the most relevant ones first
-2. REWRITE bullet points to emphasize relevant experience using the job's language
-3. ADD metrics and impact wherever possible
-4. REMOVE or de-emphasize irrelevant experience
-5. MIRROR keywords from the job posting naturally (for ATS optimization)
-6. Keep it honest — never fabricate experience, only reframe existing experience
+CRITICAL RULES:
+1. NEVER remove jobs, internships, or projects — include ALL experience from the original resume
+2. NEVER remove technical skills — keep every programming language, framework, and tool
+3. REORDER skills to put the most relevant ones first, but keep all of them
+4. REWRITE bullet points to emphasize relevant experience using the job's language
+5. ADD metrics and impact wherever possible
+6. MIRROR keywords from the job posting naturally (for ATS optimization)
+7. Keep it honest — never fabricate experience, only reframe existing experience
+8. Skills section must contain ONLY technical/hard skills (languages, frameworks, tools) — never soft skills like "collaborative" or "team player"
+9. Include a PROJECTS section if the candidate has projects — these demonstrate initiative
 
-The resume should feel like it was written BY this person FOR this specific job.
+The resume should feel like it was written BY this person FOR this specific job, while keeping the full breadth of their experience.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
@@ -79,7 +82,7 @@ Return ONLY valid JSON (no markdown, no backticks):
         ]
     },
     "skills_section": ["most relevant skill first", "second most relevant", "..."],
-    "resume_text": "The complete formatted resume text ready to submit. Use clean formatting with sections separated by lines. Include name, contact info, summary, experience (with tailored bullets), skills, education."
+    "resume_text": "The complete formatted resume text ready to submit. Include ALL sections: name, contact info, summary, ALL experience entries, ALL projects, skills (technical only), education. Never omit any role or project."
 }"""
 
 
