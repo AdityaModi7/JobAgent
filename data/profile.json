@@ -1,0 +1,110 @@
+{
+  "name": "Aditya Modi",
+  "email": "adityapmodi@gmail.com",
+  "phone": "848-213-3048",
+  "location": "New York City, NY",
+  "linkedin": "https://linkedin.com/in/aditya-modi",
+  "github": "https://github.com/Aditya",
+  "portfolio": null,
+  "summary": "Experienced software engineer with a focus on artificial intelligence and data science, skilled in developing and optimizing applications and frameworks. Adept at building predictive models and integrating technologies to enhance data retrieval and analysis.",
+  "experience": [
+    {
+      "company": "TD Securities",
+      "title": "Software Engineering Analyst",
+      "start_date": "July 2025",
+      "end_date": "Present",
+      "highlights": [
+        "Developed a Text-to-SQL chatbot that translates natural language questions into executable SQL queries",
+        "Integrated Vanna OSS with a custom Dremio client, enabling dynamic retrieval of schema and sample data to ground model responses in real database context",
+        "Evaluated LLMs (Mistral & SQLCoder) to compare accuracy and performance across prompting strategies",
+        "Optimized RAG retrieval in ChromaDB to improve relevance filtering and reduce retrieval noise"
+      ],
+      "technologies": [
+        "Python",
+        "SQL",
+        "Linux",
+        "Vanna.ai",
+        "ChromaDB",
+        "Dremio"
+      ]
+    },
+    {
+      "company": "TD Securities",
+      "title": "Software Engineering Intern",
+      "start_date": "June 2024",
+      "end_date": "August 2024",
+      "highlights": [
+        "Transformed live trade data received from Solace in XML format to JSON required for Veritas storage",
+        "Built a Spring Boot engine to poll for a trades USI every 10 minutes to store in an H2 database for compliance",
+        "Created a routing app to process and convert CME trades through an adapter, capturing all info Murex requires",
+        "Leveraged JUnit and Postman to test an upstream Spring Boot app, causing a 40% decrease in production issues"
+      ],
+      "technologies": [
+        "Spring Boot",
+        "Postman",
+        "JUnit 5",
+        "FIX Protocol",
+        "Agile"
+      ]
+    },
+    {
+      "company": "Netflix Via the Rutgers MBS Internship Program",
+      "title": "Data Extern Team Lead",
+      "start_date": "June 2023",
+      "end_date": "August 2023",
+      "highlights": [
+        "Developed a pipeline for Netflix data collection analyzing 10,000+ user reviews to uncover preferences and genre trends",
+        "Utilized VADER to analyze sentiment, identifying 70% positive feedback, guiding content curation decisions",
+        "Applied Seaborn and Scikit-learn to build a model predicting 5 years of Netflix content trained on historical data",
+        "Delivered an impactful presentation to 40+ people including mentors from Moody's and Goldman Sachs"
+      ],
+      "technologies": [
+        "Python",
+        "VADER",
+        "Seaborn",
+        "Scikit-learn"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Georgia Institute of Technology",
+      "degree": "Masters",
+      "field": "Computer Science",
+      "graduation_date": "2027",
+      "gpa": null
+    },
+    {
+      "institution": "Rutgers University",
+      "degree": "Bachelor of Science",
+      "field": "Computer Science & Data Science",
+      "graduation_date": "2025",
+      "gpa": "3.687"
+    }
+  ],
+  "skills": [
+    "Python",
+    "SQL",
+    "Java",
+    "JavaScript",
+    "HTML",
+    "CSS",
+    "Bash",
+    "Flask",
+    "Django",
+    "Spring Boot",
+    "NumPy",
+    "Pandas",
+    "VADER",
+    "Vanna.ai",
+    "AWS",
+    "Docker",
+    "Linux",
+    "JupyterHub",
+    "Dremio",
+    "VS Code",
+    "Swagger",
+    "Git"
+  ],
+  "certifications": []
+}
