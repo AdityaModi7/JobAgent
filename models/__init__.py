@@ -126,3 +126,101 @@ class Application(BaseModel):
     follow_up_dates: list[datetime] = Field(default_factory=list)
     notes: str = ""
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ── Job Search Models ───────────────────────────────────────────────────
+
+class SearchFilters(BaseModel):
+    """Criteria for searching job postings."""
+    keywords: list[str] = Field(
+        default_factory=lambda: [
+            "machine learning engineer",
+            "ml engineer",
+            "ai engineer",
+            "data scientist",
+            "deep learning engineer",
+            "nlp engineer",
+            "computer vision engineer",
+            "applied scientist",
+            "research engineer",
+            "ml ops engineer",
+        ]
+    )
+    experience_level: str = Field(
+        default="entry",
+        description="entry | mid | senior"
+    )
+    max_experience_years: int = Field(default=3)
+    locations: list[str] = Field(
+        default_factory=lambda: [
+            "New York, NY",
+            "San Francisco, CA",
+            "Seattle, WA",
+            "Los Angeles, CA",
+            "Chicago, IL",
+            "Boston, MA",
+            "Austin, TX",
+            "Washington, DC",
+        ],
+        description="Target metro areas — big cities only"
+    )
+    include_remote: bool = Field(default=True)
+    min_salary: int = Field(default=120000, description="Minimum salary floor ($)")
+    posted_within_days: int = Field(default=7)
+    exclude_companies: list[str] = Field(default_factory=list)
+
+
+class JobSearchResult(BaseModel):
+    """A single result from a job board search."""
+    title: str
+    company: str
+    location: Optional[str] = None
+    url: str
+    source: str = Field(description="linkedin | indeed | greenhouse | lever | company_site")
+    posted_date: Optional[str] = None
+    salary_range: Optional[str] = None
+    experience_years: Optional[int] = None
+    is_new_grad: bool = False
+    description_snippet: str = ""
+
+
+class SearchRun(BaseModel):
+    """Results from a single search execution."""
+    filters: SearchFilters
+    results: list[JobSearchResult] = Field(default_factory=list)
+    total_found: int = 0
+    sources_searched: list[str] = Field(default_factory=list)
+    run_timestamp: datetime = Field(default_factory=datetime.now)
+
+
+# ── Auto-Apply Models ───────────────────────────────────────────────────
+
+class ApplyMethod(str, Enum):
+    """How to submit an application."""
+    EASY_APPLY = "easy_apply"
+    FORM_FILL = "form_fill"
+    EMAIL = "email"
+    REDIRECT = "redirect"
+    MANUAL = "manual"
+
+
+class ApplyAttempt(BaseModel):
+    """Tracks a single auto-apply attempt."""
+    job_url: str
+    company: str
+    title: str
+    method: ApplyMethod
+    success: bool = False
+    error: Optional[str] = None
+    screenshot_path: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class WorkflowConfig(BaseModel):
+    """Configuration for the full auto-apply workflow."""
+    search_filters: SearchFilters = Field(default_factory=SearchFilters)
+    min_fit_score: int = Field(default=50, description="Minimum fit score to proceed with application")
+    max_applications_per_run: int = Field(default=20)
+    dry_run: bool = Field(default=True, description="Generate materials but don't submit")
+    resume_path: Optional[str] = None
+    delay_between_applies_sec: int = Field(default=30, description="Cooldown between applications")

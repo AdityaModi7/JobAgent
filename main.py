@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
-"""Job Application Agent — Main CLI orchestrator."""
+"""Job Application Agent — Main CLI orchestrator.
+
+Commands:
+    apply       Apply to a single job (URL, text, or file)
+    search      Search for ML/AI jobs matching criteria
+    run         Full agentic workflow: search → tailor → apply
+    dashboard   View application stats
+    status      Update an application's status
+    list        List tracked applications
+"""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -127,6 +137,88 @@ def cmd_apply(args):
     print(f"   Then run: python main.py status {app_id} applied")
 
 
+# ── Search Command ──────────────────────────────────────────────────────
+
+def cmd_search(args):
+    """Search for ML/AI jobs matching criteria."""
+    from agents.job_searcher import run_job_search, print_search_results, save_search_results
+    from models import SearchFilters
+
+    # Build search filters from CLI args
+    filters = SearchFilters()
+
+    if args.keywords:
+        filters.keywords = [k.strip() for k in args.keywords.split(",")]
+
+    if args.locations:
+        filters.locations = [l.strip() for l in args.locations.split(",")]
+
+    if args.min_salary:
+        filters.min_salary = args.min_salary
+
+    if args.remote:
+        filters.include_remote = True
+
+    if args.exclude:
+        filters.exclude_companies = [c.strip() for c in args.exclude.split(",")]
+
+    # Run search
+    search_run = run_job_search(filters)
+    print_search_results(search_run, limit=args.limit)
+    save_search_results(search_run)
+
+    print(f"\n💡 To process these results, run:")
+    print(f"   python main.py run                  # Dry run (preview)")
+    print(f"   python main.py run --live            # Submit applications")
+
+
+# ── Run (Full Workflow) Command ─────────────────────────────────────────
+
+def cmd_run(args):
+    """Run the full agentic workflow: search → tailor → apply."""
+    from agents.workflow_engine import run_workflow
+    from models import WorkflowConfig, SearchFilters
+
+    # Build config from CLI args
+    filters = SearchFilters()
+
+    if args.keywords:
+        filters.keywords = [k.strip() for k in args.keywords.split(",")]
+
+    if args.locations:
+        filters.locations = [l.strip() for l in args.locations.split(",")]
+
+    if args.min_salary:
+        filters.min_salary = args.min_salary
+
+    if args.remote:
+        filters.include_remote = True
+
+    if args.exclude:
+        filters.exclude_companies = [c.strip() for c in args.exclude.split(",")]
+
+    config = WorkflowConfig(
+        search_filters=filters,
+        min_fit_score=args.min_score,
+        max_applications_per_run=args.max_apps,
+        dry_run=not args.live,
+        resume_path=args.resume,
+        delay_between_applies_sec=args.delay,
+    )
+
+    # Confirm if running live
+    if args.live:
+        print("\n⚠️  LIVE MODE — Applications will be submitted for real!")
+        print(f"   Max applications: {args.max_apps}")
+        print(f"   Min fit score: {args.min_score}")
+        confirm = input("   Continue? (yes/no): ").strip().lower()
+        if confirm != "yes":
+            print("   Aborted.")
+            return
+
+    run_workflow(config)
+
+
 def cmd_dashboard(args):
     """Show application dashboard."""
     print_dashboard()
@@ -167,12 +259,12 @@ def cmd_list(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🚀 Job Application Agent — AI-powered job applications"
+        description="🚀 Job Application Agent — AI-powered ML/AI job search & auto-apply"
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # ── apply command ──
-    apply_parser = subparsers.add_parser("apply", help="Apply to a job")
+    apply_parser = subparsers.add_parser("apply", help="Apply to a single job")
     apply_parser.add_argument("--job-url", "-u", help="URL to job posting")
     apply_parser.add_argument("--job-text", "-t", help="Raw job posting text")
     apply_parser.add_argument("--job-file", "-f", help="File containing job posting")
@@ -182,6 +274,63 @@ def main():
         help="Minimum fit score to generate materials (default: 40)"
     )
     apply_parser.set_defaults(func=cmd_apply)
+
+    # ── search command ──
+    search_parser = subparsers.add_parser("search", help="Search for ML/AI jobs")
+    search_parser.add_argument(
+        "--keywords", "-k",
+        help="Comma-separated keywords (default: ml engineer, ai engineer, data scientist, ...)"
+    )
+    search_parser.add_argument(
+        "--locations", "-l",
+        help="Comma-separated target cities (default: NYC, SF, Seattle, LA, Chicago, Boston, Austin, DC)"
+    )
+    search_parser.add_argument(
+        "--min-salary", type=int, default=120000,
+        help="Minimum salary floor (default: $120,000)"
+    )
+    search_parser.add_argument("--remote", action="store_true", help="Include remote roles")
+    search_parser.add_argument("--exclude", help="Comma-separated companies to exclude")
+    search_parser.add_argument(
+        "--limit", type=int, default=30,
+        help="Max results to display (default: 30)"
+    )
+    search_parser.set_defaults(func=cmd_search)
+
+    # ── run command (full workflow) ──
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Full workflow: search → tailor resume → auto-apply"
+    )
+    run_parser.add_argument("--live", action="store_true", help="Submit applications for real (default: dry run)")
+    run_parser.add_argument(
+        "--keywords", "-k",
+        help="Comma-separated keywords (default: ml engineer, ai engineer, data scientist, ...)"
+    )
+    run_parser.add_argument(
+        "--locations", "-l",
+        help="Comma-separated target cities (default: NYC, SF, Seattle, LA, Chicago, Boston, Austin, DC)"
+    )
+    run_parser.add_argument(
+        "--min-salary", type=int, default=120000,
+        help="Minimum salary floor (default: $120,000)"
+    )
+    run_parser.add_argument("--remote", action="store_true", help="Include remote roles")
+    run_parser.add_argument("--exclude", help="Comma-separated companies to exclude")
+    run_parser.add_argument("--resume", "-r", help="Path to your resume file")
+    run_parser.add_argument(
+        "--min-score", type=int, default=50,
+        help="Minimum fit score to proceed with application (default: 50)"
+    )
+    run_parser.add_argument(
+        "--max-apps", type=int, default=20,
+        help="Maximum applications per run (default: 20)"
+    )
+    run_parser.add_argument(
+        "--delay", type=int, default=30,
+        help="Seconds between applications (default: 30)"
+    )
+    run_parser.set_defaults(func=cmd_run)
 
     # ── dashboard command ──
     dash_parser = subparsers.add_parser("dashboard", help="View application dashboard")
@@ -204,8 +353,10 @@ def main():
         parser.print_help()
         print("\n💡 Quick start:")
         print('   python main.py apply --job-url "https://example.com/job"')
-        print('   python main.py apply --job-file posting.txt')
-        print("   python main.py dashboard")
+        print("   python main.py search                      # Find ML/AI jobs")
+        print("   python main.py run                         # Dry run: search + tailor")
+        print("   python main.py run --live                  # Full auto-apply")
+        print("   python main.py dashboard                   # View stats")
         return
 
     args.func(args)
